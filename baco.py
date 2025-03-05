@@ -17,37 +17,42 @@ rules = [
 ]
 
 rule_descriptions = [
-    "Có ít nhất 5 ký tự chữ cái trong mật khẩu của bạn",
-    "Có ít nhất một chữ số trong mật khẩu của bạn",
-    "Có ít nhất một chữ cái in hoa nằm ở vị trí giữa trong mật khẩu của bạn",
-    "Có ít nhất một ký tự đặc biệt trong mật khẩu của bạn",
-    "Có tổng các chữ số trong mật khẩu bằng 25",
-    "Contains at least one month name in your password",
-    "Có ít nhất một số La Mã trong mật khẩu của bạn",
-    "Có tích của các số La Mã trong mật khẩu bằng 35",
-    "Có ít nhất một ký hiệu hai chữ cái từ bảng tuần hoàn trong mật khẩu của bạn",
-    "Có ít nhất một năm nhuận trong mật khẩu của bạn",
+    "Có ít nhất 5 ký tự chữ cái.",
+    "Có ít nhất một chữ số.",
+    "Có đúng một chữ cái in hoa và nó phải nằm ở giữa.",
+    "Có đúng một ký tự đặc biệt.",
+    "Có tổng các chữ số bằng 25.",
+    "Contains no more than one month of the year.",
+    "Có ít nhất một số La Mã (tính cả viết hoa và thường).",
+    "Có tích của các số La Mã bằng 35.",
+    "Có ít nhất một ký hiệu hai chữ cái từ bảng tuần hoàn.",
+    "Có ít nhất một năm nhuận.",
 ]
 
-# Hàm phụ để phân tích và tính tích số La Mã
+# Hàm kiểm tra số La Mã (cho phép viết thường)
 def check_roman_numerals(password):
+    roman_pattern = r'(?i)(ix|iv|viii|vii|vi|iii|ii|i|v|x)'  # Không dùng \b
+    return bool(re.search(roman_pattern, password))
+
+# Hàm tính tích số La Mã
+def check_roman_numeral_product(password):
     roman_values = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10}
-    roman_pattern = r'(IX|IV|VIII|VII|VI|III|II|I|V|X)'
-    matches = re.findall(roman_pattern, password)
+    roman_pattern = r'(?i)(IX|IV|VIII|VII|VI|III|II|I|V|X)'  # Không dùng \b
+    matches = re.findall(roman_pattern, password, re.IGNORECASE)
+    
     if not matches:
-        return False
+        return False  # Không có số La Mã nào, không cần kiểm tra
+    
     product = 1
     for match in matches:
-        product *= roman_values[match]
+        product *= roman_values[match.upper()]  # Chuyển về viết hoa để tra bảng giá trị
+    
     return product == 35
-
 # Hàm kiểm tra năm nhuận
 def check_leap_year(password):
-    # Tìm tất cả các số có 4 chữ số trong mật khẩu
     years = re.findall(r'\d{4}', password)
     for year in years:
         year_int = int(year)
-        # Kiểm tra điều kiện năm nhuận
         if (year_int % 4 == 0 and year_int % 100 != 0) or (year_int % 400 == 0):
             return True
     return False
@@ -87,6 +92,7 @@ async def check_password(update, context):
     user_progress[user_id] = len(rules)
     await update.message.reply_text("\n".join(passed_rules) + "\n🎉 Chúc mừng! Bạn đã vượt qua tất cả các quy tắc và chiến thắng!")
     del user_progress[user_id]
+
 
 def main():
     # Token bot của bạn
