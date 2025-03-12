@@ -296,6 +296,7 @@ async def check_password(update, context):
     text_result = morse_to_text(morse_code)
     encoded_message = encode_message(morse_code, text_result)
     await update.message.reply_text(f"Đây là BV của mật thư: {encoded_message.replace(' ', '')}")
+    await update.message.reply_text(f"Vui lòng không nhập đáp án mật thư ở đây")
     insert_anwsers(text_result.replace(' ', ''))
     del user_progress[user_id]
 
