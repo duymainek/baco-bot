@@ -231,13 +231,13 @@ rule_descriptions = [
 
 # Hàm kiểm tra số La Mã (cho phép viết thường)
 def check_roman_numerals(password):
-    roman_pattern = r'(?i)(ix|iv|viii|vii|vi|iii|ii|i|v|x)'  # Không dùng \b
+    roman_pattern = r'(?i)(ix|iv|viii|vii|vi|iii|ii|i|v|x|xl|l|xc|c|d|m)'  # Không dùng \b, thêm d và m
     return bool(re.search(roman_pattern, password))
 
 # Hàm tính tích số La Mã
 def check_roman_numeral_product(password):
-    roman_values = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10}
-    roman_pattern = r'(?i)(IX|IV|VIII|VII|VI|III|II|I|V|X)'  # Không dùng \b
+    roman_values = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XL": 40, "L": 50, "XC": 90, "C": 100, "D": 500, "M": 1000}
+    roman_pattern = r'(?i)(IX|IV|VIII|VII|VI|III|II|I|V|X|XL|L|XC|C|D|M)'  # Không dùng \b, thêm D và M
     matches = re.findall(roman_pattern, password, re.IGNORECASE)
     
     if not matches:
