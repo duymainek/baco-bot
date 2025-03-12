@@ -320,7 +320,7 @@ def insert_anwsers(anwser: str) -> None:
   
     try:
         supabase.table('answers').insert({
-            'answer': anwser,
+            'answer': anwser.lower(),
             'chapter': 5,
         }).execute()
     except Exception as e:
