@@ -1,26 +1,226 @@
 import telegram
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import re
+from collections import Counter
+import random
+import string
+from supabase import create_client, Client
 
-# Danh sách quy tắc
+SUPABASE_URL = "https://ifkusnuoxzllhniwkywh.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlma3VzbnVveHpsbGhuaXdreXdoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNjE0MTY1MywiZXhwIjoyMDUxNzE3NjUzfQ.PcLgon96CK6xB8Mf82FRRCZ_b7XvidAQlDD4cQ_wFKM"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
 rules = [
-    lambda p: sum(c.isalpha() for c in p) >= 5,  # Ít nhất 5 ký tự chữ cái
+    lambda p: 10 < sum(c.isalpha() for c in p) < 50 and ' ' not in p,
     lambda p: any(c.isdigit() for c in p),  # KHÔNG được thiếu số
-    lambda p: len(p) % 2 == 1 and p[len(p) // 2].isupper(),  # Phải có ít nhất một chữ in hoa ở giữa
-    lambda p: any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in p),  # KHÔNG được thiếu ký tự đặc biệt
+    lambda p: sum(1 for c in p if c.isupper()) == 1 and p[len(p) // 2].isupper(),  # Chỉ có 1 chữ cái in hoa và nó nằm ở giữa
+    lambda p: 1 <= sum(1 for c in p if c in "!") <= 2,  # Chỉ có 1 hoặc 2 ký tự đặc biệt
     lambda p: sum(int(c) for c in p if c.isdigit()) == 25 if any(c.isdigit() for c in p) else False,  # KHÔNG được có tổng chữ số khác 25
-    lambda p: any(month.lower() in p.lower() for month in ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]),  # KHÔNG được thiếu tháng
-    lambda p: any(roman in p for roman in ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]),  # KHÔNG được thiếu số La Mã
-    lambda p: check_roman_numerals(p),  # KHÔNG được có tích số La Mã khác 35
-    lambda p: any(element.lower() in p.lower() for element in ["He", "Li", "Be", "Ne", "Na", "Mg", "Al", "Si", "Cl", "Ar"]),  # KHÔNG được thiếu ký hiệu 2 chữ từ bảng tuần hoàn
+    lambda p: sum(1 for month in ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"] if month in p.lower()) == 1,  # Chỉ có duy nhất 1 tháng
+    lambda p: check_roman_numerals(p),  # Số La Mã có thể viết thường hoặc hoa
+    lambda p: check_roman_numeral_product(p),  # KHÔNG được có tích số La Mã khác 35
+    lambda p: any(element in p for element in ["He", "Li", "Be", "Ne", "Na", "Mg", "Al", "Si", "Cl", "Ar"]),  # KHÔNG được thiếu ký hiệu 2 chữ từ bảng tuần hoàn
     lambda p: check_leap_year(p),  # KHÔNG được thiếu năm nhuận
 ]
 
+TEXT_MAPPING = [
+  {"text": "KHANGCHIEN", "length": 10},
+  {"text": "TONGTANCONG", "length": 11},
+  {"text": "KHÔNGCÓHỘĐÓI", "length": 12},
+  {"text": "MỘTDISẢNTOLỚN", "length": 13},
+  {"text": "HỖTRỢNHÀỞHỢPLÝ", "length": 14},
+  {"text": "CẢITHIỆNĐỜISỐNG", "length": 15},
+  {"text": "TOCCHIENTOCTHANG", "length": 16},
+  {"text": "KHÔNGCÓNGƯỜIMÙCHỮ", "length": 17},
+  {"text": "TỆNẠNXÃHỘIBỊĐẨYLÙI", "length": 18},
+  {"text": "SỐNGANTOÀNVÀVĂNMINH", "length": 19},
+  {"text": "ANHHUNGDANTOCVIETNAM", "length": 20},
+  {"text": "CÓNẾPSỐNGVĂNMINHĐÔTHỊ", "length": 21},
+  {"text": "ĐÁNGSỐNGBẬCNHẤTVIỆTNAM", "length": 22},
+  {"text": "SINHRAVÀLỚNLÊNTẠIĐÀNẴNG", "length": 23},
+  {"text": "CẢITHIỆNCHẤTLƯỢNGĐỜISỐNG", "length": 24},
+  {"text": "KHÔNGCÓGIẾTNGƯỜIĐỂCƯỚPCỦA", "length": 25},
+  {"text": "KHÔNGCÓNGƯỜILANGTHANGXINĂN", "length": 26},
+  {"text": "HỘDÂNNGHÈOĐÃCÓMÁIẤMVỮNGCHÃI", "length": 27},
+  {"text": "MÔITRƯỜNGSỐNGANTOÀNVÀVĂNMINH", "length": 28},
+  {"text": "PHÁTTRIỂNBỀNVỮNGVÀTIẾNBỘXÃHỘI", "length": 29},
+  {"text": "NGUYỄNBÁTHANHVỊLÃNHĐẠOKIỆTXUẤT", "length": 30},
+  {"text": "THÀNHPHỐCHÚTRỌNGPHÁTTRIỂNKINHTẾ", "length": 31},
+  {"text": "ÔNGBÁTHANHLÀLÃNHĐẠOTÀIBAKIỆTXUẤT", "length": 32},
+  {"text": "TẦMNHÌNVÀTÂMHUYẾTCỦANGUYỄNBÁTHANH", "length": 33},
+  {"text": "TẦMNHÌNVÀCHIẾNLƯỢCCỦANGUYỄNBÁTHANH", "length": 34},
+  {"text": "MANGLẠICUỘCSỐNGTỐTĐẸPHƠNCHONGƯỜIDÂN", "length": 35},
+  {"text": "BÁCNGUYỄNBÁTHANHĐÃĐỂLẠIMỘTDISẢNTOLỚN", "length": 36},
+  {"text": "NẾPSỐNGVĂNMINHĐÔTHỊĐƯỢCQUANTÂMHÀNGĐẦU", "length": 37},
+  {"text": "KHUCÔNGNGHỆCAOVÀCÁCDỰÁNCHỈNHTRANGĐÔTHỊ", "length": 38},
+  {"text": "KHẮCKHOẢILÀMSAOĐỂTHAYĐỔIDIỆNMẠOTHÀNHPHỐ", "length": 39},
+  {"text": "THAYĐỔIHOÀNTOÀNCUỘCSỐNGCỦANGƯỜIDÂNĐÀNẴNG", "length": 40},
+  {"text": "ƯUTIÊNTRIỂNKHAINẾPSỐNGVĂNMINHĐÔTHỊHÀNGĐẦU", "length": 41},
+  {"text": "XÂYDỰNGKHUCÔNGNGHỆCAOVÀDỰÁNCHỈNHTRANGĐÔTHỊ", "length": 42},
+  {"text": "TỪMỘTTHÀNHPHỐNGHÈONÀNTRỞTHÀNHĐÔTHỊPHÁTTRIỂN", "length": 43},
+  {"text": "XÂYDỰNGNẾPSỐNGVĂNMINHĐÔTHỊĐƯỢCQUANTÂMHÀNGĐẦU", "length": 44},
+  {"text": "XÂYDỰNGKHUCÔNGNGHỆCAOVÀCÁCDỰÁNCHỈNHTRANGĐÔTHỊ", "length": 45},
+  {"text": "ĐÀNẴNGĐÃTRIỂNKHAICÁCCHƯƠNGTRÌNHHỖTRỢNGƯỜINGHÈO", "length": 46},
+  {"text": "VƯƠNMÌNHTỪ1THÀNHPHỐNGHÈONÀNTRỞTHÀNHĐÔTHỊLỚNMẠNH", "length": 47},
+  {"text": "TẠONỀNTẢNGCHOSỰPHÁTTRIỂNVƯỢTBẬCCỦATHÀNHPHỐĐÀNẴNG", "length": 48},
+  {"text": "ĐÀNẴNGTHÀNHTHÀNHPHỐCÓMÔITRƯỜNGSỐNGANTOÀNVÀVĂNMINH", "length": 49},
+  {"text": "VƯƠNMÌNHTHÀNHĐÔTHỊĐÁNGSỐNGVỚITỐCĐỘPHÁTTRIỂNVƯỢTBẬC", "length": 50},
+  {"text": "VƯƠNMÌNHTỪMỘTTHÀNHPHỐNGHÈONÀNTRỞTHÀNHĐÔTHỊPHÁTTRIỂN", "length": 51},
+  {"text": "ĐÀNẴNGĐÃBẮTĐẦUTRIỂNKHAICÁCCHƯƠNGTRÌNHHỖTRỢNGƯỜINGHÈO", "length": 52},
+  {"text": "TRỰCTIẾPCHỈĐẠOHÀNGLOẠTCÔNGTRÌNHTRỌNGĐIỂMNHƯCẦUSÔNGHÀN", "length": 53},
+  {"text": "NHỮNGDẤUẤNCỦAÔNGVẪNCÒNNGUYÊNVẸNTRONGLÒNGNGƯỜIDÂNĐÀNẴNG", "length": 54},
+  {"text": "TRỞTHÀNHHÌNHMẪUCHOSỰĐỔIMỚIPHÁTTRIỂNBỀNVỮNGVÀTIẾNBỘXÃHỘI", "length": 55},
+  {"text": "TẬPTRUNGTẠONỀNTẢNGCHOSỰPHÁTTRIỂNVƯỢTBẬCCỦATHÀNHPHỐĐÀNẴNG", "length": 56},
+  {"text": "ĐÀNẴNGTẬPTRUNGTHÀNHTHÀNHPHỐCÓMÔITRƯỜNGSỐNGANTOÀNVÀVĂNMINH", "length": 57},
+  {"text": "HỖTRỢNGƯỜINGHÈOGIÚPĐỠNGƯỜILANGTHANGCƠNHỠBẰNGCÁCHTẠOVIỆCLÀM", "length": 58},
+  {"text": "TẬPTRUNGVƯƠNMÌNHTỪMỘTTHÀNHPHỐNGHÈONÀNTRỞTHÀNHĐÔTHỊPHÁTTRIỂN", "length": 59},
+  {"text": "ĐÀNẴNGĐÃBẮTĐẦUTẬPTRUNGTRIỂNKHAICÁCCHƯƠNGTRÌNHHỖTRỢNGƯỜINGHÈO", "length": 60},
+  {"text": "HIỂUNHỮNGMONGMUỐNKHÓKHĂNCỦANGƯỜIDÂNĐỂTÌMRAHƯỚNGGIẢIQUYẾTTỐIƯU", "length": 61},
+  {"text": "CỐGẮNGTẬPTRUNGTẠONỀNTẢNGCHOSỰPHÁTTRIỂNVƯỢTBẬCCỦATHÀNHPHỐĐÀNẴNG", "length": 62},
+  {"text": "TẬPTRUNGTRỞTHÀNHHÌNHMẪUCHOSỰĐỔIMỚIPHÁTTRIỂNBỀNVỮNGVÀTIẾNBỘXÃHỘI", "length": 63},
+  {"text": "CỐGẮNGHỖTRỢNGƯỜINGHÈOGIÚPĐỠNGƯỜILANGTHANGCƠNHỠBẰNGCÁCHTẠOVIỆCLÀM", "length": 64},
+  {"text": "HÀNGLOẠTCÔNGTRÌNHTRỌNGĐIỂMNHƯCẦUSÔNGHÀNĐƯỜNGVENBIỂNNGUYỄNTẤTTHÀNH", "length": 65},
+  {"text": "TẬPTRUNGHỖTRỢNGƯỜINGHÈOGIÚPĐỠNGƯỜILANGTHANGCƠNHỠBẰNGCÁCHTẠOVIỆCLÀM", "length": 66},
+  {"text": "CỐGẮNGHIỂUNHỮNGMONGMUỐNKHÓKHĂNCỦANGƯỜIDÂNĐỂTÌMRAHƯỚNGGIẢIQUYẾTTỐIƯU", "length": 67},
+  {"text": "HỖTRỢNGƯỜINGHÈOGIÚPĐỠNGƯỜILANGTHANGCƠNHỠBẰNGCÁCHTẠOVIỆCLÀMĐÀOTẠONGHỀ", "length": 68},
+  {"text": "CỐGẮNGTẬPTRUNGTRỞTHÀNHHÌNHMẪUCHOSỰĐỔIMỚIPHÁTTRIỂNBỀNVỮNGVÀTIẾNBỘXÃHỘI", "length": 69},
+  {"text": "TẬPTRUNGHỖTRỢNGƯỜINGHÈOGIÚPĐỠNGƯỜILANGTHANGCƠNHỠBẰNGCÁCHTẠOVIỆCLÀM2000", "length": 70},
+  {"text": "CHỈĐẠOHÀNGLOẠTCÔNGTRÌNHTRỌNGĐIỂMNHƯCẦUSÔNGHÀNĐƯỜNGVENBIỂNNGUYỄNTẤTTHÀNH", "length": 71},
+  {"text": "CỐGẮNGTẬPTRUNGHỖTRỢNGƯỜINGHÈOGIÚPĐỠNGƯỜILANGTHANGCƠNHỠBẰNGCÁCHTẠOVIỆCLÀM", "length": 72},
+  {"text": "KHÔNGCHỈLÀMỘTNGƯỜILÃNHĐẠOGIỎIMÀCÒNLÀMỘTCONNGƯỜIĐẦYTÌNHCẢMGẦNGŨIVỚINHÂNDÂN", "length": 73},
+  {"text": "VÀOCUỘCMẠNHMẼCỦACHÍNHQUYỀNVÀNGƯỜIDÂNGÓPPHẦNTẠONÊNMỘTMÔITRƯỜNGSỐNGĐÁNGMƠƯỚC", "length": 74},
+  {"text": "CHỈĐẠOHÀNGLOẠTCÔNGTRÌNHTRỌNGĐIỂMNHƯCẦUSÔNGHÀNĐƯỜNGVENBIỂNNGUYỄNTẤTTHÀNH1998", "length": 75},
+  {"text": "CỐGẮNGTẬPTRUNGHỖTRỢNGƯỜINGHÈOGIÚPĐỠNGƯỜILANGTHANGCƠNHỠBẰNGCÁCHTẠOVIỆCLÀM2000", "length": 76},
+  {"text": "NHỮNGCHÍNHSÁCHMÀÔNGĐỀRAVẪNĐANGTIẾPTỤCPHÁTHUYHIỆUQUẢĐƯAĐÀNẴNGNGÀYCÀNGPHÁTTRIỂN", "length": 77},
+  {"text": "CỐGẮNGXÂYDỰNGHÀNGLOẠTCÔNGTRÌNHTRỌNGĐIỂMNHƯCẦUSÔNGHÀNĐƯỜNGVENBIỂNNGUYỄNTẤTTHÀNH", "length": 78},
+  {"text": "CHỈĐẠOHÀNGLOẠTCÔNGTRÌNHTRỌNGĐIỂMNHƯCẦUSÔNGHÀNĐƯỜNGVENBIỂNNGUYỄNTẤTTHÀNH19982003", "length": 79},
+  {"text": "CÁCCHƯƠNGTRÌNHGIÁODỤCMIỄNPHÍGIÚPXOÁNẠNMÙCHỮHOÀNTOÀNMANGĐẾNCƠHỘIHỌCTẬPCHOMỌINGƯỜI", "length": 80},
+  {"text": "MỘTCHÍNHSÁCHMANGTÍNHNHÂNVĂNSÂUSẮCTẠONỀNTẢNGCHOSỰPHÁTTRIỂNVƯỢTBẬCCỦATHÀNHPHỐĐÀNẴNG", "length": 81},
+{
+    "text": "ĐÀNẴNGTỪMỘTTHÀNHPHỐNHỎBÉLẠCHẬUĐÃVƯƠNMÌNHTHÀNHĐÔTHỊĐÁNGSỐNGVỚITỐCĐỘPHÁTTRIỂNVƯỢTBẬC",
+    "length": 82
+  },
+  {
+    "text": "MỘTCHÍNHSÁCHMANGTÍNHNHÂNVĂNSÂUSẮCTẠONỀNTẢNGCHOSỰPHÁTTRIỂNVƯỢTBẬCCỦATHÀNHPHỐĐÀNẴNG01",
+    "length": 83
+  },
+  {
+    "text": "CÁCCHƯƠNGTRÌNHGIÁODỤCMIỄNPHÍGIÚPXOÁNẠNMÙCHỮHOÀNTOÀNMANGĐẾNCƠHỘIHỌCTẬPCHOMỌINGƯỜI2000",
+    "length": 84
+  },
+  {
+    "text": "MỘTCHÍNHSÁCHMANGTÍNHNHÂNVĂNSÂUSẮCTẠONỀNTẢNGCHOSỰPHÁTTRIỂNVƯỢTBẬCCỦATHÀNHPHỐĐÀNẴNG2000",
+    "length": 85
+  },
+  {
+    "text": "NGUYỄNBÁTHANHKHÔNGCHỈLÀMỘTNGƯỜILÃNHĐẠOGIỎIMÀCÒNLÀMỘTCONNGƯỜIĐẦYTÌNHCẢMGẦNGŨIVỚINHÂNDÂN",
+    "length": 86
+  },
+  {
+    "text": "NGUYỄNBÁTHANHKHÔNGCHỈLÀMỘTNGƯỜILÃNHĐẠOGIỎIMÀCÒNLÀMỘTCONNGƯỜIĐẦYTÌNHCẢMGẦNGŨIVỚINHÂNDÂN1",
+    "length": 87
+  },
+  {
+    "text": "TẬPTRUNGCÁCCHƯƠNGTRÌNHGIÁODỤCMIỄNPHÍGIÚPXOÁNẠNMÙCHỮHOÀNTOÀNMANGĐẾNCƠHỘIHỌCTẬPCHOMỌINGƯỜI",
+    "length": 88
+  },
+  {
+    "text": "NGUYỄNBÁTHANHVỊLÃNHĐẠOKIỆTXUẤTNGƯỜIĐÃĐƯAĐÀNẴNGTỪMỘTTHÀNHPHỐNGHÈONÀNTRỞTHÀNHĐÔTHỊPHÁTTRIỂN",
+    "length": 89
+  },
+  {
+    "text": "ĐÀNẴNGTỪMỘTTHÀNHPHỐNHỎBÉLẠCHẬUĐÃTẬPTRUNGVƯƠNMÌNHTHÀNHĐÔTHỊĐÁNGSỐNGVỚITỐCĐỘPHÁTTRIỂNVƯỢTBẬC",
+    "length": 90
+  },
+  {
+    "text": "ĐÀNẴNGTỪMỘTTHÀNHPHỐNHỎBÉLẠCHẬUĐÃTẬPTRUNGVƯƠNMÌNHTHÀNHĐÔTHỊĐÁNGSỐNGVỚITỐCĐỘPHÁTTRIỂNVƯỢTBẬC1",
+    "length": 91
+  },
+  {
+    "text": "ĐÀNẴNGTỪMỘTTHÀNHPHỐNHỎBÉLẠCHẬUĐÃTẬPTRUNGVƯƠNMÌNHTHÀNHĐÔTHỊĐÁNGSỐNGVỚITỐCĐỘPHÁTTRIỂNVƯỢTBẬC12",
+    "length": 92
+  },
+  {
+    "text": "ĐÀNẴNGTỪMỘTTHÀNHPHỐNHỎBÉLẠCHẬUĐÃTẬPTRUNGVƯƠNMÌNHTHÀNHĐÔTHỊĐÁNGSỐNGVỚITỐCĐỘPHÁTTRIỂNVƯỢTBẬC123",
+    "length": 93
+  },
+  {
+    "text": "ĐÀNẴNGTỪMỘTTHÀNHPHỐNHỎBÉLẠCHẬUĐÃTẬPTRUNGVƯƠNMÌNHTHÀNHĐÔTHỊĐÁNGSỐNGVỚITỐCĐỘPHÁTTRIỂNVƯỢTBẬC2003",
+    "length": 94
+  },
+  {
+    "text": "ĐÀNẴNGTỪ1THÀNHPHỐNHỎBÉLẠCHẬUĐÃCỐGẮNGTẬPTRUNGVƯƠNMÌNHTHÀNHĐÔTHỊĐÁNGSỐNGVỚITỐCĐỘPHÁTTRIỂNVƯỢTBẬC1",
+    "length": 95
+  },
+  {
+    "text": "ĐÀNẴNGTỪMỘTTHÀNHPHỐNHỎBÉLẠCHẬUĐÃCỐGẮNGTẬPTRUNGVƯƠNMÌNHTHÀNHĐÔTHỊĐÁNGSỐNGVỚITỐCĐỘPHÁTTRIỂNVƯỢTBẬC",
+    "length": 96
+  },
+  {
+    "text": "NGUYỄNBÁTHANHKHÔNGCHỈLÀMỘTNGƯỜILÃNHĐẠOTÀIGIỎIMÀÔNGCÒNLÀ1CONNGƯỜIĐẦYTÌNHCẢMGẦNGŨIYÊUTHƯƠNGNHÂNDÂN1",
+    "length": 97
+  },
+  {
+    "text": "NGUYỄNBÁTHANHKHÔNGCHỈLÀMỘTNGƯỜILÃNHĐẠOTÀIGIỎIMÀÔNGCÒNLÀMỘTCONNGƯỜIĐẦYTÌNHCẢMGẦNGŨIVÀYÊUNHÂNDÂN1998",
+    "length": 98
+  },
+  {
+    "text": "NGUYỄNBÁTHANHKHÔNGCHỈLÀMỘTNGƯỜILÃNHĐẠOGIỎIMÀNGUYỄNBÁTHANHCÒNLÀMỘTCONNGƯỜIĐẦYTÌNHCẢMGẦNGŨIVỚINHÂNDÂN",
+    "length": 99
+  },
+  {
+    "text": "NGUYỄNBÁTHANHKHÔNGCHỈLÀMỘTNGƯỜILÃNHĐẠOTÀIGIỎIMÀÔNGCÒNLÀMỘTCONNGƯỜIĐẦYTÌNHCẢMGẦNGŨIVÀYÊUTHƯƠNGNHÂNDÂN",
+    "length": 100
+  },
+  {
+    "text": "NGUYỄNBÁTHANHKHÔNGCHỈLÀMỘTNGƯỜILÃNHĐẠOTÀIGIỎIMÀÔNGCÒNLÀMỘTCONNGƯỜIĐẦYTÌNHCẢMGẦNGŨIVÀYÊUTHƯƠNGNHÂNDÂN1",
+    "length": 101
+  },
+  {
+    "text": "DƯỚISỰDẪNDẮTTÀITÌNHCỦAÔNGĐÀNẴNGĐÃBỨTPHÁNGOẠNMỤCTRỞTHÀNHHÌNHMẪUCHOSỰĐỔIMỚIPHÁTTRIỂNBỀNVỮNGVÀTIẾNBỘXÃHỘI",
+    "length": 102
+  },
+  {
+    "text": "DƯỚISỰDẪNDẮTTÀITÌNHCỦAÔNGĐÀNẴNGĐÃBỨTPHÁNGOẠNMỤCTRỞTHÀNHHÌNHMẪUCHOSỰĐỔIMỚIPHÁTTRIỂNBỀNVỮNGVÀTIẾNBỘXÃHỘI1",
+    "length": 103
+  },
+  {
+    "text": "DƯỚISỰDẪNDẮTTÀITÌNHCỦAÔNGĐÀNẴNGĐÃBỨTPHÁNGOẠNMỤCTRỞTHÀNHHÌNHMẪUCHOSỰĐỔIMỚIPHÁTTRIỂNBỀNVỮNGVÀTIẾNBỘXÃHỘI01",
+    "length": 104
+  },
+  {
+    "text": "NHỮNGCÔNGTRÌNHMÀÔNGKHỞIXƯỚNGNHỮNGCHÍNHSÁCHMÀÔNGĐỀRAVẪNĐANGTIẾPTỤCPHÁTHUYHIỆUQUẢĐƯAĐÀNẴNGNGÀYCÀNGPHÁTTRIỂN",
+    "length": 105
+  }
+]
+
+MORSE_CODE_DICT = {
+    'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....',
+    'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.',
+    'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+    'Y': '-.--', 'Z': '--..', '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-',
+    '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.', '!': '-.-.--'
+}
+
+
+def text_to_morse(text):
+    text = text.upper()
+    return ' '.join(MORSE_CODE_DICT.get(char, '') for char in text if char in MORSE_CODE_DICT)
+
+def morse_to_text(morse):
+    dot_count = Counter(morse)['.']
+    for entry in TEXT_MAPPING:
+        if entry["length"] == dot_count:
+            return entry["text"]
+    return "Không tìm thấy kết quả phù hợp"
+
+
 rule_descriptions = [
-    "Có ít nhất 5 ký tự chữ cái.",
+    "Có ít nhất 10 ký tự chữ cái, không được quá 50 chữ cái và không có khoảng trắng.",
     "Có ít nhất một chữ số.",
     "Có đúng một chữ cái in hoa và nó phải nằm ở giữa.",
-    "Có đúng một ký tự đặc biệt.",
+    "Có một ký tự đặc biệt ! trong mật khẩu.",
     "Có tổng các chữ số bằng 25.",
     "Contains no more than one month of the year.",
     "Có ít nhất một số La Mã (tính cả viết hoa và thường).",
@@ -60,10 +260,11 @@ def check_leap_year(password):
 # Lưu trạng thái người chơi
 user_progress = {}
 
+
 async def start(update, context):
     user_id = update.message.from_user.id
     user_progress[user_id] = 0  # Bắt đầu từ quy tắc 0
-    await update.message.reply_text("Chào mừng bạn đến với Password Master! Hãy nhập một mật khẩu để bắt đầu.\nQuy tắc 1: " + rule_descriptions[0])
+    await update.message.reply_text("Chào mừng bạn đến với thử thách Ba Có! Nhiệm vụ của bạn là tạo ra một OTT đáp ứng yêu cầu của chúng tôi đưa ra. Bạn sẽ nhận được BV của mật thư khi hoàn thành thử thách. Hãy nhập một OTT bất kì để bắt đầu.\nQuy tắc 1: " + rule_descriptions[0])
 
 async def check_password(update, context):
     user_id = update.message.from_user.id
@@ -90,9 +291,41 @@ async def check_password(update, context):
 
     # Nếu không bị sai quy tắc nào, cập nhật trạng thái và tiếp tục
     user_progress[user_id] = len(rules)
-    await update.message.reply_text("\n".join(passed_rules) + "\n🎉 Chúc mừng! Bạn đã vượt qua tất cả các quy tắc và chiến thắng!")
+    await update.message.reply_text("\n".join(passed_rules) + "\n🎉 Chúc mừng! Bạn đã hoàn thành việc tạo khoá!")
+    morse_code = text_to_morse(password)
+    text_result = morse_to_text(morse_code)
+    encoded_message = encode_message(morse_code, text_result)
+    await update.message.reply_text(f"Đây là BV của mật thư: {encoded_message.replace(' ', '')}")
+    insert_anwsers(text_result.replace(' ', ''))
     del user_progress[user_id]
 
+def encode_message(morse_template, decoded_message):
+    decoded_chars = list(decoded_message)
+    encoded_message = []
+    vietnamese_chars = 'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđabcdefghijklmnopqrstuvwxyz'
+    
+    for char in morse_template:
+        if char == '.':
+            encoded_message.append(decoded_chars.pop(0) if decoded_chars else '.')
+        elif char == '-':
+            encoded_message.append(random.choice(vietnamese_chars.upper()))
+        else:
+            encoded_message.append(char)
+    
+    return ''.join(encoded_message)
+
+
+def insert_anwsers(anwser: str) -> None:
+    """Insert answers to Supabase."""
+  
+    try:
+        supabase.table('answers').insert({
+            'answer': anwser,
+            'chapter': 5,
+        }).execute()
+    except Exception as e:
+        print(f"Failed to insert anwsers: {e}")
+        raise
 
 def main():
     # Token bot của bạn

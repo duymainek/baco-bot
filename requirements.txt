@@ -1,1 +1,4 @@
+gotrue
+supabase
 python-telegram-bot
+httpx
