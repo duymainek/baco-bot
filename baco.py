@@ -208,6 +208,7 @@ def text_to_morse(text):
     text = text.upper()
     return ' '.join(MORSE_CODE_DICT.get(char, '') for char in text if char in MORSE_CODE_DICT)
 
+
 def morse_to_text(morse):
     dot_count = Counter(morse)['.']
     for entry in TEXT_MAPPING:
