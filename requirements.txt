@@ -2,3 +2,4 @@ gotrue
 supabase
 python-telegram-bot
 httpx
+opencv-python

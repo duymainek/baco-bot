@@ -12,7 +12,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 rules = [
-    lambda p: 10 < sum(c.isalpha() for c in p) < 50 and ' ' not in p,
+    lambda p: 10 < sum(c.isalpha() for c in p) < 40 and ' ' not in p,
     lambda p: any(c.isdigit() for c in p),  # KHÔNG được thiếu số
     lambda p: sum(1 for c in p if c.isupper()) == 1 and p[len(p) // 2].isupper(),  # Chỉ có 1 chữ cái in hoa và nó nằm ở giữa
     lambda p: 1 <= sum(1 for c in p if c in "!") <= 2,  # Chỉ có 1 hoặc 2 ký tự đặc biệt
@@ -217,7 +217,7 @@ def morse_to_text(morse):
 
 
 rule_descriptions = [
-    "Có ít nhất 10 ký tự chữ cái, không được quá 50 chữ cái và không có khoảng trắng.",
+    "Có ít nhất 10 ký tự chữ cái, không được quá 40 chữ cái và không có khoảng trắng.",
     "Có ít nhất một chữ số.",
     "Có đúng một chữ cái in hoa và nó phải nằm ở giữa.",
     "Có một ký tự đặc biệt ! trong mật khẩu.",
@@ -291,9 +291,13 @@ async def check_password(update, context):
 
     # Nếu không bị sai quy tắc nào, cập nhật trạng thái và tiếp tục
     user_progress[user_id] = len(rules)
-    await update.message.reply_text("\n".join(passed_rules) + "\n🎉 Chúc mừng! Bạn đã hoàn thành việc tạo khoá!")
     morse_code = text_to_morse(password)
     text_result = morse_to_text(morse_code)
+    if not text_result:
+        await update.message.reply_text("OTT của bạn quá dài, vui lòng thử lại OTT khác")
+        return
+    await update.message.reply_text("\n".join(passed_rules) + "\n🎉 Chúc mừng! Bạn đã hoàn thành việc tạo khoá!")
+
     encoded_message = encode_message(morse_code, text_result)
     await update.message.reply_text(f"Đây là BV của mật thư: {encoded_message.replace(' ', '')}")
     await update.message.reply_text(f"Vui lòng không nhập đáp án mật thư ở đây")
