@@ -12,7 +12,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 rules = [
-    lambda p: 10 < sum(c.isalpha() for c in p) < 40 and ' ' not in p,
+    lambda p: 10 < sum(c.isalpha() for c in p) < 25 and ' ' not in p,
     lambda p: all(c.isalpha() and c.upper() in string.ascii_uppercase for c in p if c.isalpha()),
     lambda p: any(c.isdigit() for c in p),  # KHÔNG được thiếu số
     lambda p: sum(1 for c in p if c.isupper()) == 1 and p[len(p) // 2].isupper(),  # Chỉ có 1 chữ cái in hoa và nó nằm ở giữa
@@ -217,7 +217,7 @@ def morse_to_text(morse):
 
 
 rule_descriptions = [
-    "Có ít nhất 10 ký tự chữ cái, không được quá 40 chữ cái và không có khoảng trắng.",
+    "Có ít nhất 10 ký tự chữ cái, không được quá 25 chữ cái và không có khoảng trắng.",
     "Có tất cả các ký tự là chữ cái trong bảng chữ cái Alphabet.",
     "Có ít nhất một chữ số.",
     "Có đúng một chữ cái in hoa và nó phải nằm ở giữa.",
