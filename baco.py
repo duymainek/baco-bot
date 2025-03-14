@@ -242,6 +242,7 @@ def check_roman_numeral_product(password):
     if not matches:
         return False  # Không có số La Mã nào, không cần kiểm tra
     
+    
     product = 1
     for match in matches:
         product *= roman_values[match.upper()]  # Chuyển về viết hoa để tra bảng giá trị
