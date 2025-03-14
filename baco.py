@@ -226,7 +226,7 @@ rule_descriptions = [
     "Có ít nhất một chữ số.",
     "Có đúng một chữ cái in hoa và nó phải nằm ở giữa.",
     "Có tổng các chữ số bằng 25.",
-    "Contains no more than one month of the year.",
+    "Contains exactly one month of the year; it must not include more than one month, nor be missing any month.",
     "Có ít nhất một số La Mã (tính cả viết hoa và thường).",
     "Có tích của các số La Mã bằng 35.",
     "Có ít nhất một năm nhuận bắt đầu từ năm 1000.",
