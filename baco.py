@@ -24,6 +24,10 @@ rules = [
 ]
 
 TEXT_MAPPING = [
+  {"text": "DANANG", "length": 6},
+  {"text": "DDANANG", "length": 7},
+  {"text": "DDAFNANG", "length": 8},
+  {"text": "DDAFNAWNG", "length": 9},
   {"text": "KHANGCHIEN", "length": 10},
   {"text": "TONGTANCONG", "length": 11},
   {"text": "KHÔNGCÓHỘĐÓI", "length": 12},
@@ -213,7 +217,7 @@ def morse_to_text(morse):
     for entry in TEXT_MAPPING:
         if entry["length"] == dot_count:
             return entry["text"]
-    return "Không tìm thấy kết quả phù hợp"
+    return None
 
 
 rule_descriptions = [
@@ -225,7 +229,7 @@ rule_descriptions = [
     "Contains no more than one month of the year.",
     "Có ít nhất một số La Mã (tính cả viết hoa và thường).",
     "Có tích của các số La Mã bằng 35.",
-    "Có ít nhất một năm nhuận.",
+    "Có ít nhất một năm nhuận bắt đầu từ năm 1000.",
 ]
 
 # Hàm kiểm tra số La Mã (cho phép viết thường)
@@ -259,15 +263,67 @@ def check_leap_year(password):
 
 # Lưu trạng thái người chơi
 user_progress = {}
+user_codes = {}
 
+# Hàm kiểm tra mã code có tồn tại trong bảng users
+async def check_code_exists(code):
+    try:
+        response = supabase.table('users').select('*').eq('code', code).execute()
+        return len(response.data) > 0
+    except Exception as e:
+        print(f"Lỗi khi kiểm tra mã code: {e}")
+        return False
 
 async def start(update, context):
     user_id = update.message.from_user.id
-    user_progress[user_id] = 0  # Bắt đầu từ quy tắc 0
-    await update.message.reply_text("Chào mừng bạn đến với thử thách Ba Có! Nhiệm vụ của bạn là tạo ra một OTT đáp ứng yêu cầu của chúng tôi đưa ra. Bạn sẽ nhận được BV của mật thư khi hoàn thành thử thách. Hãy nhập một OTT bất kì để bắt đầu.\nQuy tắc 1: " + rule_descriptions[0])
+    await update.message.reply_text("Chào mừng bạn đến với thử thách Ba Có! Vui lòng nhập mã code của đội để bắt đầu.\nBạn có thể sử dụng lệnh /restart để bắt đầu lại thử thách bất cứ lúc nào.")
+
+async def restart(update, context):
+    user_id = update.message.from_user.id
+    
+    # Xóa dữ liệu người dùng
+    if user_id in user_progress:
+        del user_progress[user_id]
+    if user_id in user_codes:
+        del user_codes[user_id]
+    
+    await update.message.reply_text("Đã khởi động lại thử thách. Vui lòng nhập mã code của đội để bắt đầu lại.")
+
+async def verify_code(update, context):
+    user_id = update.message.from_user.id
+    code = update.message.text.strip()
+    
+    # Kiểm tra xem người dùng đã nhập mã code chưa
+    if user_id in user_codes:
+        # Người dùng đã có mã code, chuyển sang xử lý mật khẩu
+        await check_password(update, context)
+        return
+    
+    # Kiểm tra mã code có tồn tại không
+    if await check_code_exists(code):
+        user_codes[user_id] = code
+        user_progress[user_id] = 0  # Bắt đầu từ quy tắc 0
+        await update.message.reply_text(f"Mã code hợp lệ! Nhiệm vụ của bạn là tạo ra một OTT đáp ứng yêu cầu của chúng tôi đưa ra. Bạn sẽ nhận được BV của mật thư khi hoàn thành thử thách. Hãy nhập một OTT bất kì để bắt đầu.\nQuy tắc 1: {rule_descriptions[0]}")
+    else:
+        await update.message.reply_text("Mã code không hợp lệ. Vui lòng thử lại.")
 
 async def check_password(update, context):
     user_id = update.message.from_user.id
+    # Hàm ghi log
+    print(f"Checking password for user_id: {user_id}")
+    print(f"Message received: {update.message.text}")
+    # Log user_codes để theo dõi mã code của người dùng
+    print(f"Current user_codes: {user_codes}")
+    if user_id in user_codes:
+        print(f"User {user_id} has code: {user_codes[user_id]}")
+    else:
+        print(f"User {user_id} has no code assigned yet")
+    
+    # Kiểm tra xem người dùng đã nhập mã code chưa
+    if user_id not in user_codes:
+        await verify_code(update, context)
+        return
+    
     if user_id not in user_progress:
         await update.message.reply_text("Vui lòng bắt đầu bằng lệnh /start!")
         return
@@ -294,14 +350,14 @@ async def check_password(update, context):
     morse_code = text_to_morse(password)
     text_result = morse_to_text(morse_code)
     if not text_result:
-        await update.message.reply_text("OTT của bạn quá dài, vui lòng thử lại OTT khác")
+        await update.message.reply_text("OTT của bạn quá dài hoặc quá ngắn, vui lòng thử lại OTT khác")
         return
     await update.message.reply_text("\n".join(passed_rules) + "\n🎉 Chúc mừng! Bạn đã hoàn thành việc tạo khoá!")
 
     encoded_message = encode_message(morse_code, text_result)
     await update.message.reply_text(f"Đây là BV của mật thư: {encoded_message.replace(' ', '')}")
     await update.message.reply_text(f"Vui lòng không nhập đáp án mật thư ở đây")
-    insert_anwsers(text_result.replace(' ', ''))
+    insert_anwsers(text_result.replace(' ', ''),user_id)
     del user_progress[user_id]
 
 def encode_message(morse_template, decoded_message):
@@ -320,13 +376,14 @@ def encode_message(morse_template, decoded_message):
     return ''.join(encoded_message)
 
 
-def insert_anwsers(anwser: str) -> None:
+def insert_anwsers(anwser: str, user_id: int) -> None:
     """Insert answers to Supabase."""
   
     try:
         supabase.table('answers').insert({
             'answer': anwser.lower(),
             'chapter': 5,
+            'of_user': user_codes[user_id]
         }).execute()
     except Exception as e:
         print(f"Failed to insert anwsers: {e}")
@@ -341,10 +398,10 @@ def main():
 
     # Thêm handler
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("restart", restart))  # Add restart command that calls the same function as start
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_password))
 
     # Chạy bot
     application.run_polling()
-
 if __name__ == "__main__":
     main()
