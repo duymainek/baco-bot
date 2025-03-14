@@ -225,7 +225,7 @@ def morse_to_text(morse):
 
 
 rule_descriptions = [
-    "Có ít nhất 10 ký tự chữ cái, không được quá 25 chữ cái và không có khoảng trắng.",
+    "Có ít nhất 11 ký tự chữ cái, không được quá 25 chữ cái và không có khoảng trắng.",
     "Có tất cả các ký tự là chữ cái trong bảng chữ cái Alphabet.",
     "Có ít nhất một chữ số.",
     "Có đúng một chữ cái in hoa và nó phải nằm ở giữa.",
