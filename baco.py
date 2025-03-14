@@ -352,7 +352,7 @@ async def check_password(update, context):
     if not text_result:
         await update.message.reply_text("OTT của bạn quá dài hoặc quá ngắn, vui lòng thử lại OTT khác")
         return
-    await update.message.reply_text("\n".join(passed_rules) + "\n🎉 Chúc mừng! Bạn đã hoàn thành việc tạo khoá!")
+    await update.message.reply_text("\n".join(passed_rules) + "\n🎉 Chúc mừng! Bạn đã hoàn thành việc tạo khoá. Hãy lưu trữ khoá này lại nhé")
 
     encoded_message = encode_message(morse_code, text_result)
     await update.message.reply_text(f"Đây là BV của mật thư: {encoded_message.replace(' ', '')}")
